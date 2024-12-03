@@ -1,0 +1,75 @@
+from netmiko import ConnectHandler
+import difflib
+
+# Define variables 
+device = {
+    'device_type': 'cisco_ios',
+    'ip': '192.168.56.101',
+    'username': 'prne',
+    'password': 'cisco123!',
+    'secret': 'class123!',  # Enable password
+}
+
+output_file = 'running_config.txt'
+startup_file = 'start_up_config.txt'
+
+# Establish SSH connection
+try:
+    connection = ConnectHandler(**device)
+    connection.enable()  # Enter enable mode
+
+    # Set terminal length to 0 to prevent paging
+    connection.send_command("terminal length 0")
+
+    # Configure GigabitEthernet1 interface
+    print('--- Configuring GigabitEthernet1 interface...')
+    config_commands = [
+        "interface GigabitEthernet1",
+        "ip address 192.168.56.130 255.255.255.0",
+        "no shutdown"
+    ]
+    config_output = connection.send_config_set(config_commands)
+    print(config_output)
+
+    # Verify GigabitEthernet1 configuration
+    print('--- Verifying GigabitEthernet1 configuration...')
+    verification_output = connection.send_command("show ip interface brief | include GigabitEthernet1")
+    print(verification_output)
+
+    # Get running configuration
+    running_config = connection.send_command("show running-config")
+
+    # Save the running configuration to a file
+    with open(output_file, 'w') as file:
+        file.write(running_config)
+
+    # Get startup configuration
+    startup_config = connection.send_command("show startup-config")
+
+    # Save the startup configuration to a file
+    with open(startup_file, 'w') as file:
+        file.write(startup_config)
+
+    # Compare configurations
+    differ = difflib.Differ()
+    diff = list(differ.compare(running_config.splitlines(), startup_config.splitlines()))
+
+    # Display the diff
+    print('\n--- Differences between running and startup configuration')
+    for line in diff:
+        print(line)
+
+    # Display a success message
+    print('-------------------------------------------------')
+    print('--- Success! connecting to: ', device['ip'])
+    print('---               Username: ', device['username'])
+    print('--- Running configuration saved for ', output_file)
+    print('--- Start_up configuration saved for ', startup_file)
+    print('-------------------------------------------------')
+
+except Exception as e:
+    print(f"--- FAILURE! Error occurred: {e}")
+
+finally:
+    # Terminate SSH session
+    connection.disconnect()
